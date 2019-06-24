@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow.keras
 import numpy as np
@@ -13,6 +14,7 @@ from tensorflow.python.keras.optimizers import RMSprop
 from tensorflow.python.keras.callbacks import ModelCheckpoint, TensorBoard
 from tensorflow.python.keras.preprocessing.text import Tokenizer
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
+import pickle
 
 def load_image(path, size=None):
     img = Image.open(path)
@@ -27,7 +29,6 @@ def load_image(path, size=None):
         img = np.repeat(img[:, :, np.newaxis], 3, axis=2)
 
     return img
-
 def process_images(data_dir,filenames, batch_size=32):
     num_images = len(filenames)
     shape = (batch_size,) + img_size + (3,)
@@ -62,21 +63,35 @@ def print_progress(count, max_count):
     pct_complete = count / max_count
     msg = "\r- Progress: {0:.1%}".format(pct_complete)
     sys.stdout.write(msg)
-    sys.stdout.flush()
-
+    sys.stdout.flush()       
+batch_size=100
 trans=[]
 count=[0]
 data = pd.read_csv('qwerty.csv', error_bad_lines=False, sep = '|')
 filenames_train=data["image_name"]
-filenames_train=filenames_train.unique()[:10]
+filenames_train=filenames_train.unique()[:150]
 num_images_train = len(filenames_train)
 image_model = VGG16(include_top=True, weights='imagenet')
 transfer_layer = image_model.get_layer('fc2')
-image_model_transfer = Model(inputs=image_model.input, outputs=transfer_layer.output)
+image_model_transfer = Model(inputs=image_model.input,outputs=transfer_layer.output)
 img_size = K.int_shape(image_model.input)[1:3]
 transfer_values_size = K.int_shape(transfer_layer.output)[1]
-transfer_values=np.asarray(process_images('flickr30k_images', filenames_train[:10]))
+#run this if u want to create a .pkl file containing transfer_values
+"""this data in the pkl file can be obtained when running the program without computing 
+and processing through the images again"""
+"""
+with open('transfer_values.pkl', 'wb') as f:
+    #creates transfer_values.pkl if the file does not exist
+    pickle.dump(transfer_values, f)
+"""
+"""
+transfer_values=np.asarray(process_images('flickr30k_images', filenames_train[:150]))
 transfer_values.shape
+"""
+#loading previously saved  pickle file and storing in variable called transfer_values
+
+with open('transfer_values.pkl', 'rb') as f:
+      transfer_values = pickle.load(f)
 mark_start = 'ssss '
 mark_end = ' eeee'
 class TokenizerWrap(Tokenizer):
@@ -108,6 +123,7 @@ class TokenizerWrap(Tokenizer):
                   for captions_list in captions_listlist]
         
         return tokens
+
 def get_random_caption_tokens(idx):
     result = []
     for i in idx:
@@ -115,18 +131,18 @@ def get_random_caption_tokens(idx):
         tokens = tokens_train[i][j]
         result.append(tokens)
 
-    return result        
+    return result
 def mark_captions(captions_listlist):
     captions_marked = [[mark_start + caption + mark_end
                         for caption in captions_list]
                         for captions_list in captions_listlist]
     
-    return captions_marked    
+    return captions_marked   
 def batch_generator(batch_size):
     while True:
-        idx = [0,1,2,3,4,5,6,7,8,9]
+        idx = [t for t in range(batch_size)]
         trans=transfer_values[idx]
-        tokens = [tokens_train[i] for i in rand]
+        tokens = [tokens_train[i] for i in idx]
         num_tokens = [len(t) for t in tokens_train]
         max_tokens = np.max(num_tokens)
         tokens_padded = np.array(pad_sequences(tokens_train,maxlen=max_tokens,padding='post',truncating='post'))
@@ -135,12 +151,12 @@ def batch_generator(batch_size):
         x_data = {'decoder_input': decoder_input_data,'transfer_values_input': trans}
         y_data = {'decoder_output':decoder_output_data}
         
-        yield (x_data, y_data)    
+        yield (x_data, y_data)
 captions_train=data[" comment"]
-captions_train=list(captions_train.head(50))
+captions_train=list(captions_train.head(5*batch_size))
 for i in range(len(captions_train)):
-    captions_train[i]=[(captions_train[i])]       
-captions_train_marked = mark_captions(list(captions_train))
+    captions_train[i]=[(captions_train[i])]
+captions_train_marked = mark_captions(list(captions_train))     
 def flatten(captions_listlist):
     captions_list = [caption
                      for captions_list in captions_listlist
@@ -154,16 +170,16 @@ captions_train_marked
 while(i<len(captions_train_marked)):
     final_captions.append(captions_train_marked[i])
     i=i+5  
-final_captions=np.asarray(final_captions)    
+final_captions=np.asarray(final_captions) 
 num_words = 10000
 captions_train_flat=flatten(final_captions)
+np.asarray(captions_train_flat).shape    
 tokenizer = TokenizerWrap(texts=captions_train_flat,num_words=num_words)
-token_start = tokenizer.word_index[mark_start.strip()]
-token_end = tokenizer.word_index[mark_end.strip()]
+token_start = tokenizer.word_index[mark_start.strip()]    
+token_end = tokenizer.word_index[mark_end.strip()]       
 tokens_train = tokenizer.captions_to_tokens(final_captions)
 for i in range(len(tokens_train)):
-    tokens_train[i]=tokens_train[i][0]
-batch_size = 10
+    tokens_train[i]=tokens_train[i][0] 
 generator = batch_generator(batch_size=batch_size)
 batch=next(generator)
 batch_x =batch[0]
@@ -183,11 +199,8 @@ decoder_gru3 = GRU(state_size, name='decoder_gru3',return_sequences=True)
 decoder_dense = Dense(num_words,activation='linear',name='decoder_output')
 def connect_decoder(transfer_values):
     initial_state = decoder_transfer_map(transfer_values)
-
     net = decoder_input
-
     net = decoder_embedding(net)
-
     net = decoder_gru1(net, initial_state=initial_state)
     net = decoder_gru2(net, initial_state=initial_state)
     net = decoder_gru3(net, initial_state=initial_state)
@@ -196,23 +209,24 @@ def connect_decoder(transfer_values):
     
     return decoder_output
 decoder_output = connect_decoder(transfer_values=transfer_values_input)
-decoder_model = Model(inputs=[transfer_values_input, decoder_input],
-                      outputs=[decoder_output])    
+
+decoder_model = Model(inputs=[transfer_values_input, decoder_input],outputs=[decoder_output])    
 def sparse_cross_entropy(y_true, y_pred):
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true,logits=y_pred)
+
     loss_mean = tf.reduce_mean(loss)
+
     return loss_mean
 optimizer = RMSprop(lr=1e-3)  
-decoder_target = tf.placeholder(dtype='int32', shape=(None, None))
-decoder_model.compile(optimizer=optimizer,loss=sparse_cross_entropy,target_tensors=[decoder_target])  
+decoder_target = tf.placeholder(dtype='int32', shape=(None, None))  
+decoder_model.compile(optimizer=optimizer,loss=sparse_cross_entropy,target_tensors=[decoder_target])
 path_checkpoint = '22_checkpoint.keras'
 callback_checkpoint = ModelCheckpoint(filepath=path_checkpoint,verbose=1,save_weights_only=True)
 callback_tensorboard = TensorBoard(log_dir='./22_logs/',histogram_freq=0,write_graph=False)
-callbacks = [callback_checkpoint, callback_tensorboard]
 try:
     decoder_model.load_weights(path_checkpoint)
 except Exception as error:
     print("Error trying to load checkpoint.")
     print(error)
 decoder_model.fit_generator(generator=generator,steps_per_epoch=steps_per_epoch,epochs=20)
-
+    
