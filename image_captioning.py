@@ -124,28 +124,21 @@ class TokenizerWrap(Tokenizer):
         
         return tokens
 
-def get_random_caption_tokens(idx):
-    result = []
-    for i in idx:
-        j = np.random.choice(len(tokens_train[i]))
-        tokens = tokens_train[i][j]
-        result.append(tokens)
 
-    return result
 def mark_captions(captions_listlist):
-    captions_marked = [[mark_start + caption + mark_end
+    captions_marked = [[mark_start + str(caption) + mark_end
                         for caption in captions_list]
                         for captions_list in captions_listlist]
     
     return captions_marked   
 def batch_generator(batch_size):
     while True:
-        idx = [t for t in range(batch_size)]
+        idx = np.random.randint(num_images_train,size=abatch_size)
         trans=transfer_values[idx]
         tokens = [tokens_train[i] for i in idx]
         num_tokens = [len(t) for t in tokens_train]
         max_tokens = np.max(num_tokens)
-        tokens_padded = np.array(pad_sequences(tokens_train,maxlen=max_tokens,padding='post',truncating='post'))
+        tokens_padded = np.array(pad_sequences(tokens,maxlen=max_tokens,padding='post',truncating='post'))
         decoder_input_data = tokens_padded[:, 0:-1]
         decoder_output_data = tokens_padded[:, 1:]
         x_data = {'decoder_input': decoder_input_data,'transfer_values_input': trans}
@@ -220,13 +213,11 @@ def sparse_cross_entropy(y_true, y_pred):
 optimizer = RMSprop(lr=1e-3)  
 decoder_target = tf.placeholder(dtype='int32', shape=(None, None))  
 decoder_model.compile(optimizer=optimizer,loss=sparse_cross_entropy,target_tensors=[decoder_target])
-path_checkpoint = '22_checkpoint.keras'
-callback_checkpoint = ModelCheckpoint(filepath=path_checkpoint,verbose=1,save_weights_only=True)
-callback_tensorboard = TensorBoard(log_dir='./22_logs/',histogram_freq=0,write_graph=False)
 try:
     decoder_model.load_weights(path_checkpoint)
 except Exception as error:
     print("Error trying to load checkpoint.")
     print(error)
+callback=keras.callbacks.TensorBoard(log_dir='./Graph', histogram_freq=0,write_graph=True, write_images=True)    
 decoder_model.fit_generator(generator=generator,steps_per_epoch=steps_per_epoch,epochs=20)
     
