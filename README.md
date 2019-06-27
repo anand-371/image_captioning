@@ -21,3 +21,15 @@ vector with only 512 as this is the internal state-size of the GRU .To do this w
 	We chose to use RMSprop over Adam optimizer as in some cases Adam Optimizer seems to diverge with Recurrent Neural Networks.
 **Implemented using:**
 				Tensorflow,keras
+
+The following is the summary of the VGG 16 model
+				
+![VGG16](https://user-images.githubusercontent.com/40825655/60294124-48358580-993e-11e9-823c-f0a302d7336b.PNG)
+![VGG16-2](https://user-images.githubusercontent.com/40825655/60294202-74e99d00-993e-11e9-8760-4e4245a4fe64.PNG)
+
+The following is the summary of the Recurrent layer
+![Rnn](https://user-images.githubusercontent.com/40825655/60294464-0e18b380-993f-11e9-9526-62e5eec598f1.PNG)
+
+
+the processed Tensorboard graphs are as follows
+![graph_large_attrs_key=_too_large_attrs limit_attr_size=1024 run=](https://user-images.githubusercontent.com/40825655/60294609-6780e280-993f-11e9-9cde-89f5fec972f6.png)
