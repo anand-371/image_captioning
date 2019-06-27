@@ -219,5 +219,5 @@ except Exception as error:
     print("Error trying to load checkpoint.")
     print(error)
 callback=keras.callbacks.TensorBoard(log_dir='./Graph', histogram_freq=0,write_graph=True, write_images=True)    
-decoder_model.fit_generator(generator=generator,steps_per_epoch=steps_per_epoch,epochs=20)
+decoder_model.fit_generator(generator=generator,steps_per_epoch=steps_per_epoch,epochs=5,callbacks=[callback])
     
