@@ -15,7 +15,10 @@ from tensorflow.python.keras.callbacks import ModelCheckpoint, TensorBoard
 from tensorflow.python.keras.preprocessing.text import Tokenizer
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 import pickle
+import keras
 
+total_train_size=100
+batch_size=10
 def load_image(path, size=None):
     img = Image.open(path)
 
@@ -63,13 +66,13 @@ def print_progress(count, max_count):
     pct_complete = count / max_count
     msg = "\r- Progress: {0:.1%}".format(pct_complete)
     sys.stdout.write(msg)
-    sys.stdout.flush()       
-batch_size=100
+    sys.stdout.flush()   
+    
+batch_size=10
 trans=[]
-count=[0]
 data = pd.read_csv('qwerty.csv', error_bad_lines=False, sep = '|')
 filenames_train=data["image_name"]
-filenames_train=filenames_train.unique()[:150]
+filenames_train=filenames_train.unique()
 num_images_train = len(filenames_train)
 image_model = VGG16(include_top=True, weights='imagenet')
 transfer_layer = image_model.get_layer('fc2')
@@ -92,6 +95,10 @@ transfer_values.shape
 
 with open('transfer_values.pkl', 'rb') as f:
       transfer_values = pickle.load(f)
+        
+transfer_values=transfer_values[:total_train_size]
+num_images_train=total_train_size   
+
 mark_start = 'ssss '
 mark_end = ' eeee'
 class TokenizerWrap(Tokenizer):
@@ -124,16 +131,23 @@ class TokenizerWrap(Tokenizer):
         
         return tokens
 
+def get_random_caption_tokens(idx):
+    result = []
+    for i in idx:
+        j = np.random.choice(len(tokens_train[i]))
+        tokens = tokens_train[i][j]
+        result.append(tokens)
 
+    return result
 def mark_captions(captions_listlist):
     captions_marked = [[mark_start + str(caption) + mark_end
                         for caption in captions_list]
                         for captions_list in captions_listlist]
     
-    return captions_marked   
+    return captions_marked  
 def batch_generator(batch_size):
     while True:
-        idx = np.random.randint(num_images_train,size=abatch_size)
+        idx=np.random.randint(total_train_size,size=batch_size)
         trans=transfer_values[idx]
         tokens = [tokens_train[i] for i in idx]
         num_tokens = [len(t) for t in tokens_train]
@@ -146,30 +160,32 @@ def batch_generator(batch_size):
         
         yield (x_data, y_data)
 captions_train=data[" comment"]
-captions_train=list(captions_train.head(5*batch_size))
+captions_train=list(captions_train.head(5*total_train_size))
 for i in range(len(captions_train)):
     captions_train[i]=[(captions_train[i])]
-captions_train_marked = mark_captions(list(captions_train))     
+captions_train_marked = mark_captions(list(captions_train))
+
+
 def flatten(captions_listlist):
     captions_list = [caption
                      for captions_list in captions_listlist
                      for caption in captions_list]
     
     return captions_list
-#captions_train_flat = flatten(captions_train_marked)
+
 final_captions=[]
 i=0
 captions_train_marked
 while(i<len(captions_train_marked)):
     final_captions.append(captions_train_marked[i])
     i=i+5  
-final_captions=np.asarray(final_captions) 
+final_captions=np.asarray(final_captions)
 num_words = 10000
 captions_train_flat=flatten(final_captions)
 np.asarray(captions_train_flat).shape    
 tokenizer = TokenizerWrap(texts=captions_train_flat,num_words=num_words)
 token_start = tokenizer.word_index[mark_start.strip()]    
-token_end = tokenizer.word_index[mark_end.strip()]       
+token_end = tokenizer.word_index[mark_end.strip()]   
 tokens_train = tokenizer.captions_to_tokens(final_captions)
 for i in range(len(tokens_train)):
     tokens_train[i]=tokens_train[i][0] 
@@ -180,16 +196,19 @@ batch_y = batch[1]
 num_captions_train = [len(captions) for captions in tokens_train]
 total_num_captions_train = np.sum(num_captions_train)
 steps_per_epoch = int(total_num_captions_train / batch_size)
+
 state_size = 512
 embedding_size = 128
 transfer_values_input = Input(shape=(transfer_values_size,),name='transfer_values_input')
 decoder_transfer_map = Dense(state_size,activation='tanh',name='decoder_transfer_map')
 decoder_input = Input(shape=(None, ), name='decoder_input')
+
 decoder_embedding = Embedding(input_dim=num_words,output_dim=embedding_size,name='decoder_embedding')
 decoder_gru1 = GRU(state_size, name='decoder_gru1',return_sequences=True)
 decoder_gru2 = GRU(state_size, name='decoder_gru2',return_sequences=True)
 decoder_gru3 = GRU(state_size, name='decoder_gru3',return_sequences=True)
 decoder_dense = Dense(num_words,activation='linear',name='decoder_output')
+
 def connect_decoder(transfer_values):
     initial_state = decoder_transfer_map(transfer_values)
     net = decoder_input
@@ -201,6 +220,7 @@ def connect_decoder(transfer_values):
     decoder_output = decoder_dense(net)
     
     return decoder_output
+
 decoder_output = connect_decoder(transfer_values=transfer_values_input)
 
 decoder_model = Model(inputs=[transfer_values_input, decoder_input],outputs=[decoder_output])    
@@ -210,14 +230,21 @@ def sparse_cross_entropy(y_true, y_pred):
     loss_mean = tf.reduce_mean(loss)
 
     return loss_mean
+
 optimizer = RMSprop(lr=1e-3)  
 decoder_target = tf.placeholder(dtype='int32', shape=(None, None))  
 decoder_model.compile(optimizer=optimizer,loss=sparse_cross_entropy,target_tensors=[decoder_target])
+
 try:
     decoder_model.load_weights(path_checkpoint)
 except Exception as error:
     print("Error trying to load checkpoint.")
     print(error)
-callback=keras.callbacks.TensorBoard(log_dir='./Graph', histogram_freq=0,write_graph=True, write_images=True)    
-decoder_model.fit_generator(generator=generator,steps_per_epoch=steps_per_epoch,epochs=5,callbacks=[callback])
+    
+call=keras.callbacks.TensorBoard(log_dir='./Graph', histogram_freq=0,write_graph=True, write_images=True)
+decoder_model.fit_generator(generator=generator,steps_per_epoch=steps_per_epoch,epochs=5,callbacks=[call])
+    
+
+
+
     
