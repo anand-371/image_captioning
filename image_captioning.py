@@ -16,6 +16,7 @@ from tensorflow.python.keras.preprocessing.text import Tokenizer
 from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 import pickle
 import keras
+from keras.models import model_from_json
 
 total_train_size=100
 batch_size=10
@@ -246,5 +247,9 @@ decoder_model.fit_generator(generator=generator,steps_per_epoch=steps_per_epoch,
     
 
 
-
+model_json = decoder_model.to_json()
+with open("model.json", "w") as json_file:
+    json_file.write(model_json)
+# serialize weights to HDF5
+decoder_model.save_weights("model.h5")
     
