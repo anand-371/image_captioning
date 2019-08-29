@@ -33,3 +33,5 @@ The following is the summary of the Recurrent layer
 
 the processed Tensorboard graphs are as follows
 ![graph_large_attrs_key=_too_large_attrs limit_attr_size=1024 run=](https://user-images.githubusercontent.com/40825655/60294609-6780e280-993f-11e9-9cde-89f5fec972f6.png)
+
+![adversial](https://user-images.githubusercontent.com/40825655/63917499-6449c600-ca58-11e9-96ff-1259d182ec03.PNG)
